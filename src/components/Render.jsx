@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import Main from "./Main";
 import MobileSidebar from "./MobileSidebar";
-import { db } from "../firebase";
+import { db } from "../Firebase";
 import {
   collection,
   addDoc,
