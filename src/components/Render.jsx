@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import Sidebar from "./Sidebar";
 import Main from "./Main";
 import MobileSidebar from "./MobileSidebar";
-import { db } from "../Firebase";
+import AuthForm from "./AuthForm";
+import ProfileModal from "./ProfileModal";
+import RenameModal from "./RenameModal";
+import { db, auth, signOut } from "../Firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import {
   collection,
   addDoc,
@@ -11,79 +15,114 @@ import {
   deleteDoc,
   onSnapshot,
   doc,
+  query,
+  where
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function Render() {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [activeMessages, setActiveMessages] = useState([]);
-  const [isLoadingChat, setIsLoadingChat] = useState(false); // Для загрузки сообщений активного чата
-  const [isLoadingChatsList, setIsLoadingChatsList] = useState(true); // Для первоначальной загрузки списка чатов
+  const [isLoadingChat, setIsLoadingChat] = useState(false);
+  const [isLoadingChatsList, setIsLoadingChatsList] = useState(true);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [sidebarPinned, setSidebarPinned] = useState(false);
 
   const [showRenameModal, setShowRenameModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [currentModalChatId, setCurrentModalChatId] = useState(null);
   const [initialRenameTitle, setInitialRenameTitle] = useState("");
 
+  const [user, setUser] = useState(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileModalPosition, setProfileModalPosition] = useState({ top: 0, right: 0 });
+  const [isChangingAccount, setIsChangingAccount] = useState(false);
 
-  // Загрузка чатов из Firebase
   useEffect(() => {
-    setIsLoadingChatsList(true); // Начинаем загрузку списка чатов
-    const unsub = onSnapshot(collection(db, "chats"), (snapshot) => {
-      const loadedChats = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      loadedChats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-      setChats(loadedChats);
-
-      if (activeChatId && !loadedChats.some(chat => chat.id === activeChatId)) {
-        // Если активный чат был удален, сбрасываем его
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsChangingAccount(false);
+      if (!currentUser) {
+        setChats([]);
         setActiveChatId(null);
         setActiveMessages([]);
       }
-      setIsLoadingChatsList(false); // Заканчиваем загрузку списка чатов
+      setIsLoadingChatsList(false);
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showProfileModal && !event.target.closest(".profile-modal-container")) {
+        setShowProfileModal(false);
+      }
+    };
+    if (showProfileModal) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showProfileModal]);
+
+  useEffect(() => {
+    if (!user) {
+      setChats([]);
+      return;
+    }
+    setIsLoadingChatsList(true);
+    const q = query(collection(db, "chats"), where("userId", "==", user.uid));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const loadedChats = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      loadedChats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      setChats(loadedChats);
+      if (activeChatId && !loadedChats.some(chat => chat.id === activeChatId)) {
+        setActiveChatId(null);
+        setActiveMessages([]);
+      }
+      setIsLoadingChatsList(false);
     }, (error) => {
       console.error("Ошибка загрузки списка чатов:", error);
       setIsLoadingChatsList(false);
     });
-    return () => unsub(); // Отписываемся при размонтировании компонента
-  }, [activeChatId]); // Зависимость от activeChatId для сброса, если чат удален
+    return () => unsub();
+  }, [user, activeChatId]);
 
-  // Загрузка сообщений для выбранного чата
   const loadMessages = async (chatId) => {
-    if (chatId === activeChatId) { // Если чат уже активен, ничего не делаем
-      setShowMobileSidebar(false); // Все равно закрываем мобильный сайдбар
+    if (chatId === activeChatId) {
+      setShowMobileSidebar(false);
       return;
     }
-    setIsLoadingChat(true); // Начало загрузки сообщений для нового чата
-    setShowMobileSidebar(false); // Закрываем мобильный сайдбар при выборе чата
+    setIsLoadingChat(true);
+    setShowMobileSidebar(false);
     try {
       const chatRef = doc(db, "chats", chatId);
       const docSnap = await getDoc(chatRef);
-      if (docSnap.exists()) {
+      if (docSnap.exists() && docSnap.data().userId === user?.uid) {
         setActiveMessages(docSnap.data().messages || []);
         setActiveChatId(chatId);
       } else {
-        // Чат не найден, сбрасываем активный
         setActiveChatId(null);
         setActiveMessages([]);
       }
     } catch (error) {
       console.error("Ошибка загрузки сообщений:", error);
     } finally {
-      setIsLoadingChat(false); // Конец загрузки сообщений
+      setIsLoadingChat(false);
     }
   };
 
-  // Создание нового чата
   const createChat = async (firstMsg) => {
-    setIsLoadingChat(true); // Показываем лоадер при создании нового чата
+    if (!user) return null;
+    setIsLoadingChat(true);
     try {
       const docRef = await addDoc(collection(db, "chats"), {
-        title: firstMsg.substring(0, 20) + "...", // Заголовок из первых 20 символов
+        title: firstMsg.substring(0, 20) + "...",
         messages: [{ sender: "user", text: firstMsg }],
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        userId: user.uid
       });
       setActiveChatId(docRef.id);
       setActiveMessages([{ sender: "user", text: firstMsg }]);
@@ -96,27 +135,32 @@ export default function Render() {
     }
   };
 
-  // Обновление существующего чата
   const updateChat = async (chatId, updatedMessages) => {
+    if (!user || !chatId) return;
     try {
       const chatRef = doc(db, "chats", chatId);
-      await setDoc(chatRef, { messages: updatedMessages, updatedAt: Date.now() }, { merge: true });
-      // setActiveMessages(updatedMessages); // Это теперь не нужно, onSnapshot обновит сам
+      const docSnap = await getDoc(chatRef);
+      if (docSnap.exists() && docSnap.data().userId === user?.uid) {
+        await setDoc(chatRef, { messages: updatedMessages, updatedAt: Date.now() }, { merge: true });
+      }
     } catch (error) {
       console.error("Ошибка обновления чата:", error);
     }
   };
 
-  // Удаление чата
   const handleDeleteChat = async (chatId) => {
-    setIsLoadingChat(true); // Показываем лоадер при удалении
+    if (!user || !chatId) return;
+    setIsLoadingChat(true);
     try {
-      await deleteDoc(doc(db, "chats", chatId));
-      if (chatId === activeChatId) {
-        setActiveChatId(null);
-        setActiveMessages([]);
+      const chatRef = doc(db, "chats", chatId);
+      const docSnap = await getDoc(chatRef);
+      if (docSnap.exists() && docSnap.data().userId === user?.uid) {
+        await deleteDoc(chatRef);
+        if (chatId === activeChatId) {
+          setActiveChatId(null);
+          setActiveMessages([]);
+        }
       }
-      setShowDeleteConfirm(false); // Закрываем модалку после удаления
     } catch (error) {
       console.error("Ошибка удаления чата:", error);
     } finally {
@@ -124,13 +168,16 @@ export default function Render() {
     }
   };
 
-  // Переименование чата
   const handleRenameChat = async (chatId, newTitle) => {
-    setIsLoadingChat(true); // Показываем лоадер при переименовании
+    if (!user || !chatId) return;
+    setIsLoadingChat(true);
     try {
       const chatRef = doc(db, "chats", chatId);
-      await setDoc(chatRef, { title: newTitle, updatedAt: Date.now() }, { merge: true });
-      setShowRenameModal(false); // Закрываем модалку после переименования
+      const docSnap = await getDoc(chatRef);
+      if (docSnap.exists() && docSnap.data().userId === user?.uid) {
+        await setDoc(chatRef, { title: newTitle, updatedAt: Date.now() }, { merge: true });
+      }
+      setShowRenameModal(false);
     } catch (error) {
       console.error("Ошибка переименования чата:", error);
     } finally {
@@ -138,51 +185,85 @@ export default function Render() {
     }
   };
 
-  // Отправка сообщения (пользователя)
   const handleSendMessage = async (msg) => {
+    if (!user) return null;
     let currentChatId = activeChatId;
     if (!currentChatId) {
-      // Если чат не активен, создаем новый
       currentChatId = await createChat(msg);
-      if (!currentChatId) return null; // Ошибка создания чата
+      if (!currentChatId) return null;
     } else {
-      // Иначе добавляем сообщение к существующему чату
       const updated = [...activeMessages, { sender: "user", text: msg }];
       await updateChat(currentChatId, updated);
     }
-    return currentChatId; // Возвращаем ID чата для дальнейшей работы с AI
+    return currentChatId;
   };
 
-  // Обработка ответа бота
   const handleBotReply = async (chatId, msgText) => {
-    // Получаем текущие сообщения, добавляем ответ бота и обновляем в Firebase
-    const chatRef = doc(db, "chats", chatId);
-    const docSnap = await getDoc(chatRef);
-    if (docSnap.exists()) {
-      const currentMessages = docSnap.data().messages || [];
-      const updatedMessages = [...currentMessages, { sender: "bot", text: msgText }];
-      await setDoc(chatRef, { messages: updatedMessages, updatedAt: Date.now() }, { merge: true });
+    if (!user || !chatId) return;
+    try {
+      const chatRef = doc(db, "chats", chatId);
+      const docSnap = await getDoc(chatRef);
+      if (docSnap.exists() && docSnap.data().userId === user?.uid) {
+        const currentMessages = docSnap.data().messages || [];
+        const updatedMessages = [...currentMessages, { sender: "bot", text: msgText }];
+        await setDoc(chatRef, { messages: updatedMessages, updatedAt: Date.now() }, { merge: true });
+      }
+    } catch (error) {
+      console.error("Ошибка при сохранении ответа бота:", error);
     }
   };
 
-  // Функции для управления модальными окнами
   const openRenameModal = (chatId) => {
     const chatToRename = chats.find(chat => chat.id === chatId);
-    if (chatToRename) {
+    if (chatToRename && chatToRename.userId === user?.uid) {
       setInitialRenameTitle(chatToRename.title);
       setCurrentModalChatId(chatId);
       setShowRenameModal(true);
     }
   };
 
-  const openDeleteConfirm = (chatId) => {
-    setCurrentModalChatId(chatId);
-    setShowDeleteConfirm(true);
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setShowProfileModal(false);
+    } catch (error) {
+      console.error("Ошибка выхода:", error);
+      alert("Не удалось выйти. Попробуйте снова.");
+    }
   };
+
+  const handleChangeAccount = async () => {
+    try {
+      setIsChangingAccount(true);
+      await signOut(auth); 
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider); 
+    } catch (error) {
+      console.error("Ошибка при смене аккаунта:", error);
+      setIsChangingAccount(false);
+    }
+  };
+
+  const handleOpenProfileModal = (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setProfileModalPosition({
+      top: rect.bottom + 10,
+      right: window.innerWidth - rect.right
+    });
+    setShowProfileModal(true);
+  };
+
+  if (!user && !isChangingAccount) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#f0f4f9]">
+        <AuthForm onAuthSuccess={() => {}} />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {isLoadingChatsList && ( // Лоадер для загрузки списка чатов
+      {isLoadingChatsList && (
         <div className="fixed inset-0 bg-white bg-opacity-75 flex items-center justify-center z-[1000]">
           <svg className="animate-spin h-10 w-10 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -192,128 +273,27 @@ export default function Render() {
         </div>
       )}
 
-      <Sidebar
-        chats={chats}
-        activeChatId={activeChatId}
-        onSelectChat={loadMessages}
-        onNewChat={() => {
-          setActiveChatId(null);
-          setActiveMessages([]);
-          setShowMobileSidebar(false); // Закрываем мобильный сайдбар при создании нового чата
-        }}
-        onRenameChat={openRenameModal}
-        onDeleteChat={openDeleteConfirm}
-        pinned={sidebarPinned}
-        onTogglePinned={setSidebarPinned}
-      />
-
-      <Main
-        isLoadingChat={isLoadingChat} // Передаем состояние загрузки активного чата
-        messages={activeMessages} // Передаем активные сообщения
-        onSend={handleSendMessage} // Передаем функцию отправки сообщения
-        onBotReply={handleBotReply} // Передаем функцию для ответа бота
-        onToggleMobileSidebar={() => setShowMobileSidebar(!showMobileSidebar)}
-      />
-
-      {showMobileSidebar && (
-        <MobileSidebar
-          onClose={() => setShowMobileSidebar(false)}
-          onSelectChat={loadMessages}
-          onNewChat={() => {
-            setActiveChatId(null);
-            setActiveMessages([]);
-            setShowMobileSidebar(false);
-          }}
-          chats={chats}
-          activeChatId={activeChatId}
-        />
+      {showProfileModal && (
+        <div className="absolute z-[100] profile-modal-container" style={{ top: profileModalPosition.top, right: profileModalPosition.right }}>
+          <ProfileModal user={user} onClose={() => setShowProfileModal(false)} onSignOut={handleSignOut} onChangeAccount={handleChangeAccount} />
+        </div>
       )}
 
-      {/* Модальное окно переименования */}
+      <Sidebar chats={chats} activeChatId={activeChatId} onSelectChat={loadMessages} onNewChat={() => { setActiveChatId(null); setActiveMessages([]); }} onRenameChat={openRenameModal} onDeleteChat={handleDeleteChat} pinned={sidebarPinned} onTogglePinned={setSidebarPinned} user={user} />
+
+      <Main isLoadingChat={isLoadingChat} messages={activeMessages} onSend={handleSendMessage} onBotReply={handleBotReply} onToggleMobileSidebar={() => setShowMobileSidebar(!showMobileSidebar)} user={user} onOpenProfileModal={handleOpenProfileModal} />
+
+      {showMobileSidebar && (
+        <MobileSidebar onClose={() => setShowMobileSidebar(false)} onSelectChat={loadMessages} onNewChat={() => { setActiveChatId(null); setActiveMessages([]); setShowMobileSidebar(false); }} onRenameChat={openRenameModal} onDeleteChat={handleDeleteChat} chats={chats} activeChatId={activeChatId} user={user} onOpenProfileModal={() => { setShowProfileModal(true); setShowMobileSidebar(false); }} />
+      )}
+
       {showRenameModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
-            <RenameModal
-              chatId={currentModalChatId}
-              initialTitle={initialRenameTitle}
-              onClose={() => setShowRenameModal(false)}
-              onRename={handleRenameChat}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Модальное окно подтверждения удаления */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
-            <p className="mb-4 text-center">Удалить этот чат?</p>
-            <div className="flex justify-end gap-2">
-              <button
-                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Отмена
-              </button>
-              <button
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                onClick={() => handleDeleteChat(currentModalChatId)}
-              >
-                Удалить
-              </button>
-            </div>
+            <RenameModal chatId={currentModalChatId} initialTitle={initialRenameTitle} onClose={() => setShowRenameModal(false)} onRename={handleRenameChat} />
           </div>
         </div>
       )}
     </div>
-  );
-}
-
-// Компонент модального окна переименования
-function RenameModal({ chatId, initialTitle, onClose, onRename }) {
-  const [title, setTitle] = useState(initialTitle);
-
-  useEffect(() => {
-    setTitle(initialTitle); // Обновляем заголовок при изменении initialTitle (например, при открытии для другого чата)
-  }, [initialTitle]);
-
-  const handleSave = () => {
-    if (title.trim() !== "") {
-      onRename(chatId, title);
-    } else {
-      alert("Название чата не может быть пустым!");
-    }
-  };
-
-  return (
-    <div>
-      <p className="mb-2 text-lg font-semibold">Новое имя чата:</p>
-      <input
-        className="w-full border px-3 py-2 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-400"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Введите название"
-        autoFocus // Автофокус на поле ввода
-        onKeyPress={(e) => {
-          if (e.key === "Enter") {
-            handleSave();
-          }
-        }}
-      />
-      <div className="flex justify-end gap-2">
-        <button
-          className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-          onClick={onClose}
-        >
-          Отмена
-        </button>
-        <button
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-          onClick={handleSave}
-        >
-          Сохранить
-        </button>
-      </div>
-    </div>
-  );
-}
+  )
+};
