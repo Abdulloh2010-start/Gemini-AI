@@ -288,11 +288,7 @@ export default function Render() {
       )}
 
       {showRenameModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
             <RenameModal chatId={currentModalChatId} initialTitle={initialRenameTitle} onClose={() => setShowRenameModal(false)} onRename={handleRenameChat} />
-          </div>
-        </div>
       )}
     </div>
   )
