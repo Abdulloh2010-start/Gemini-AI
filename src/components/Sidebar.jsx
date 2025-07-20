@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { assets } from '../assets/assets'
-import ThemeSettingsModal from './ThemeSettingsModal'
+import { useState } from 'react';
+import { assets } from '../assets/assets';
+import ThemeSettingsModal from './ThemeSettingsModal';
 
 export default function Sidebar({ chats, activeChatId, onSelectChat, onNewChat, onRenameChat, onDeleteChat, pinned, onTogglePinned, user}) {
   const [menuOpenId, setMenuOpenId] = useState(null)
@@ -57,14 +57,14 @@ export default function Sidebar({ chats, activeChatId, onSelectChat, onNewChat, 
               <p className={`text-[14px] transition-opacity duration-300 ${extended ? 'opacity-100' : 'opacity-0'}`}>{user.displayName || user.email?.split('@')[0]}</p>
             </div>
           )}
-          <div onClick={() => setShowThemeModal(true)} className={`flex items-center gap-[12px] h-[40px] px-[10px] py-[10px] rounded-full hover:bg-[#e2e6eb] cursor-pointer transition-all duration-200 ${extended ? 'w-[250px]' : 'w-[40px]'}`}>
+          <div onClick={ !showThemeModal ? () => setShowThemeModal(true) : () => setShowThemeModal(false)} className={`flex items-center gap-[12px] h-[40px] px-[10px] py-[10px] rounded-full hover:bg-[#e2e6eb] cursor-pointer transition-all duration-200 ${extended ? 'w-[250px]' : 'w-[40px]'}`}>
             <img src={assets.setting_icon} alt="Settings" className="w-[20px]" />
             <p className={`text-[14px] transition-opacity duration-300 ${extended ? 'opacity-100' : 'opacity-0'}`}>Настройки и справка</p>
           </div>
         </div>
 
         {menuOpenId && (
-          <div className="fixed bg-white border rounded shadow-md w-[150px] z-[10000]" style={{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }}>
+          <div className="fixed bg-white border-black border rounded rounded-bl-none shadow-md w-[150px] z-[10000]" style={{ top: `${menuPos.top}px`, left: `${menuPos.left}px` }}>
             <div onClick={() => { onRenameChat(menuOpenId); setMenuOpenId(null) }} className="px-4 py-2 hover:bg-gray-100 text-sm cursor-pointer">Переименовать</div>
             <div onClick={() => { onDeleteChat(menuOpenId); setMenuOpenId(null) }} className="px-4 py-2 hover:bg-gray-100 text-sm text-red-500 cursor-pointer">Удалить</div>
           </div>

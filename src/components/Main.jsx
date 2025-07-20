@@ -101,8 +101,17 @@ export default function Main({ isLoadingChat, messages, onSend, onBotReply, onTo
           {displayedMessages.map((msg, i) => {
             const isUser = msg.sender === 'user'
             return (
-              <div key={i} className={`max-w-[80%] px-4 py-3 text-sm sm:text-base whitespace-pre-wrap ${isUser ? 'self-end bg-blue-500 text-white' : 'self-start bg-gray-100 text-gray-900'} rounded-2xl ${isUser ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}>
-                {msg.text}
+              <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} gap-1`}>
+                <div className="w-[30px] h-[30px]">
+                  {isUser ? (
+                    <img src={user?.photoURL || assets.user_icon} alt="user" className="w-full h-full rounded-full object-cover ml-[30px]"/>
+                  ) : (
+                    <img src={assets.gemini_icon} alt="Gemini" className="w-full h-full rounded-full object-cover ml-[-30px]"/>
+                  )}
+                </div>
+                <div className={`px-4 py-3 text-sm sm:text-base whitespace-pre-wrap break-words inline-block rounded-2xl max-w-[80%] ${  isUser  ? 'bg-blue-500 text-white rounded-tr-sm'  : 'bg-gray-100 text-gray-900 rounded-tl-sm'}`}>
+                  <p>{msg.text}</p>
+                </div>
               </div>
             )
           })}

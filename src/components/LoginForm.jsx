@@ -14,8 +14,8 @@ export default function LoginForm({ onLogin, onSwitchToRegister }) {
     }
   }
   return (
-    <form onSubmit={handleSubmit} className="p-8 bg-white rounded-xl shadow-2xl w-full max-w-md transform transition-all duration-300 ease-out scale-100 opacity-100">
-      <h2 className="text-3xl font-extrabold mb-8 text-center text-gray-900">Добро пожаловать!</h2>
+    <form onSubmit={handleSubmit} className="p-8 bg-white rounded-xl shadow-2xl w-[80%] mx-auto md:w-full md:max-w-md transform transition-all duration-300 ease-out scale-100 opacity-100">
+      <h2 className="text-2xl md:text-3xl font-extrabold mb-8 text-center text-gray-900">Добро пожаловать!</h2>
       {error && <p className="text-red-500 text-sm mb-4 text-center bg-red-100 p-2 rounded-md">{error}</p>}
       <div className="mb-5">
         <label className="block text-gray-700 text-sm font-semibold mb-2" htmlFor="email">Email</label>

@@ -1,8 +1,10 @@
-import { useState } from 'react'
-import { assets } from '../assets/assets'
+import { useState } from 'react';
+import { assets } from '../assets/assets';
+import ThemeSettingsModal from './ThemeSettingsModal';
 
 export default function MobileSidebar({ onClose, onSelectChat, onNewChat, onRenameChat, onDeleteChat, chats, activeChatId, user, onOpenProfileModal }) {
   const [menuOpenId, setMenuOpenId] = useState(null)
+  const [showThemeModal, setShowThemeModal] = useState(false)
   return (
     <div className={`fixed inset-0 z-50 flex sm:hidden [animation:slide-in-left_0.3s_ease-out_forwards]`}>
       <div className="w-[250px] h-full bg-[#f0f4f9] px-[20px] pt-[30px] flex flex-col justify-between shadow-lg [animation:slide-in-left_0.3s_ease-out_forwards]">
@@ -39,13 +41,14 @@ export default function MobileSidebar({ onClose, onSelectChat, onNewChat, onRena
               <p className="[animation-pulse-cursor] text-[14px]">{user.displayName||user.email?.split('@')[0]}</p>
             </div>
           )}
-          <div className="flex items-center gap-[12px] h-[40px] px-[10px] py-[10px] rounded-[9999px] hover:bg-[#e2e6eb] cursor-pointer">
+          <div onClick={ !showThemeModal ? () => setShowThemeModal(true) : () => setShowThemeModal(false)} className="flex items-center gap-[12px] h-[40px] px-[10px] py-[10px] rounded-[9999px] hover:bg-[#e2e6eb] cursor-pointer">
             <img src={assets.setting_icon} alt="Settings" className="w-[20px]" />
             <p className="text-[14px]">Настройки и справка</p>
           </div>
         </div>
       </div>
       <div className="flex-1 bg-transparent" onClick={onClose}></div>
+      {showThemeModal && <ThemeSettingsModal onClose={() => setShowThemeModal(false)} />}
     </div>
   )
 };

@@ -64,18 +64,11 @@ const handleEmailLogin = async (email, password) => {
       {verificationSent ? (
         <div className="bg-green-100 text-green-700 p-4 rounded-md text-center">
           <p className="text-md">На ваш email отправлено письмо для подтверждения. Пожалуйста, проверьте почту и подтвердите аккаунт перед входом.</p>
-        </div>
-      ) : isRegistering ? (
-        <RegisterForm onRegister={handleEmailRegister} onSwitchToLogin={() => setIsRegistering(false)} />
-      ) : (
-        <LoginForm onLogin={handleEmailLogin} onSwitchToRegister={() => setIsRegistering(true)} />
-      )}
+        </div>) : isRegistering ? (<RegisterForm onRegister={handleEmailRegister} onSwitchToLogin={() => setIsRegistering(false)} />) : (<LoginForm onLogin={handleEmailLogin} onSwitchToRegister={() => setIsRegistering(true)} />)}
       <div className="mt-8 text-center">
         <p className="text-gray-600 text-lg mb-4 font-light">или</p>
-        <button onClick={handleGoogleSignIn} className="flex items-center gap-[30px] cursor-pointer justify-center bg-white border border-gray-300 rounded-lg shadow-md px-6 py-3 text-base font-medium text-gray-800 hover:bg-gray-100 w-full transition-all duration-200 transform hover:scale-105">
-          <i className="fa-brands fa-google"></i>Войти через Google
-        </button>
+        <button onClick={handleGoogleSignIn} className="flex items-center w-[350px] mx-auto gap-[30px] cursor-pointer justify-center bg-white border border-gray-300 rounded-lg shadow-md px-6 py-3 text-base font-medium text-gray-800 hover:bg-gray-100 md:w-full transition-all duration-200 transform hover:scale-105"><i className="fa-brands fa-google"></i>Войти через Google</button>
       </div>
     </div>
-  );
-}
+  )
+};
