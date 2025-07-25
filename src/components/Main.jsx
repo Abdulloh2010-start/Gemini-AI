@@ -41,6 +41,7 @@ export default function Main({ isLoadingChat, messages, onSend, onBotReply, onTo
 
   const startRecording = async () => {
     try {
+      setAudioBase64(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
@@ -56,6 +57,7 @@ export default function Main({ isLoadingChat, messages, onSend, onBotReply, onTo
           setAudioBase64(reader.result);
         };
         reader.readAsDataURL(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorderRef.current.start();
@@ -69,7 +71,6 @@ export default function Main({ isLoadingChat, messages, onSend, onBotReply, onTo
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       setIsRecording(false);
     }
   };
@@ -176,8 +177,6 @@ export default function Main({ isLoadingChat, messages, onSend, onBotReply, onTo
       setBotTyping(false);
       typeBotResponse('Произошла ошибка при получении ответа от AI.', newChatId);
     } finally {
-      setImageBase64(null);
-      setAudioBase64(null);
     }
   };
 
@@ -210,7 +209,9 @@ export default function Main({ isLoadingChat, messages, onSend, onBotReply, onTo
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      if (!botTyping && !isLoadingChat) handleSend();
+      if (!botTyping && !isLoadingChat && (input.trim() || imageBase64 || audioBase64)) {
+        handleSend();
+      }
     }
   };
 
@@ -271,18 +272,39 @@ export default function Main({ isLoadingChat, messages, onSend, onBotReply, onTo
       </div>
       <div className="sticky bottom-0 bg-white z-10 p-4">
         <div className="max-w-3xl mx-auto">
-          <div className="flex items-center gap-3 bg-[#f0f4f9] rounded-full px-5 py-2 shadow-md">
-            <button onClick={() => fileInputRef.current.click()} className="text-sm text-blue-500">
-              <img src={assets.gallery_icon} alt="Галерея" className='w-[20px] h-[20px] cursor-pointer' />
-            </button>
-            <button onClick={isRecording ? stopRecording : startRecording} className={`w-9 h-9 flex items-center justify-center rounded-full transition ${isRecording ? 'bg-red-500 animate-pulse' : 'cursor-pointer hover:bg-gray-300'}`}>
-              <img src={isRecording ? assets.mic_stop_icon : assets.mic_icon} alt="Голос" className="w-5" />
-            </button>
-            <textarea rows={1} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyPress} placeholder="Спросить Gemini..." className="flex-1 resize-none bg-transparent outline-none text-sm sm:text-base text-[#202123] max-h-[150px] overflow-y-auto"/>
-            <input type="file" accept="image/*" onChange={handleImageUpload} ref={fileInputRef} className="hidden" />
-            <button onClick={handleSend} disabled={botTyping || isLoadingChat || (!input.trim() && !imageBase64 && !audioBase64)} className={`w-9 h-9 flex items-center justify-center rounded-full transition ${botTyping || isLoadingChat || (!input.trim() && !imageBase64 && !audioBase64) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}>
-              <img src={assets.send_icon} alt="Отправить" className="w-5" />
-            </button>
+          <div className="flex flex-col gap-2 bg-[#f0f4f9] rounded-2xl px-4 py-2 shadow-md">
+            {(imageBase64 || audioBase64) && (
+              <div className="flex items-center justify-between p-2 bg-gray-200 rounded-lg">
+                {imageBase64 && (
+                  <div className="flex items-center gap-2">
+                    <img src={imageBase64} alt="Предпросмотр изображения" className="h-12 w-12 object-cover rounded-md" />
+                    <span className="text-sm text-gray-600">Изображение</span>
+                  </div>
+                )}
+                {audioBase64 && (
+                  <div className="flex items-center gap-2">
+                    <audio controls src={audioBase64} className="w-48"></audio>
+                    <span className="text-sm text-gray-600">Голосовое</span>
+                  </div>
+                )}
+                <button onClick={() => { setImageBase64(null); setAudioBase64(null); }} className="p-1 rounded-full hover:bg-gray-300">
+                  <img src={assets.close_icon} alt="Удалить" className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <div className="flex items-end gap-3">
+              <button onClick={() => fileInputRef.current.click()} className="text-sm text-blue-500 p-2 rounded-full hover:bg-gray-200">
+                <img src={assets.gallery_icon} alt="Галерея" className='w-[20px] h-[20px] cursor-pointer' />
+              </button>
+              <button onClick={isRecording ? stopRecording : startRecording} className={`w-9 h-9 flex cursor-pointer items-center justify-center rounded-full transition ${isRecording ? 'bg-red-500 animate-pulse' : 'hover:bg-gray-200'}`}>
+                <img src={isRecording ? assets.mic_stop_icon : assets.mic_icon} alt="Голос" className="w-5" />
+              </button>
+              <textarea rows={1}value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyPress} placeholder="Спросить Gemini..." className="flex-1 resize-none bg-transparent outline-none text-sm sm:text-base text-[#202123] max-h-[150px] overflow-y-auto py-2"/>
+              <input type="file" accept="image/*" onChange={handleImageUpload} ref={fileInputRef} className="hidden" />
+              <button onClick={handleSend} disabled={botTyping || isLoadingChat || (!input.trim() && !imageBase64 && !audioBase64)} className={`w-9 h-9 flex items-center justify-center rounded-full transition ${botTyping || isLoadingChat || (!input.trim() && !imageBase64 && !audioBase64) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600'}`}>
+                <img src={assets.send_icon} alt="Отправить" className="w-5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
